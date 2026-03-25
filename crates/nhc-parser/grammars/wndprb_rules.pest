@@ -1,0 +1,42 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Wind Speed Probabilities (wndprb / PWS) — product-specific rules
+// Prepended with common.pest by build.rs
+//
+// The 2025 format uses a flat single-table layout.  The body is captured
+// verbatim and parsed into typed entries entirely in Rust.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Top-level ───────────────────────────────────────────────────────────────
+
+wndprb = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    header_line ~
+    nws_line ~
+    ("ISSUED" ~ (!nl ~ ANY)* ~ nl)? ~
+    issued_line ~
+    body ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl* ~ "NNNN" ~ nl* ~
+    EOI
+}
+
+// ── Header ──────────────────────────────────────────────────────────────────
+
+header_line = {
+    status ~ storm_name ~ nl? ~
+    ("SPECIAL")? ~ "WIND SPEED PROBABILITIES" ~ "NUMBER" ~ advisory_num ~ (!nl ~ ANY)* ~ nl
+}
+
+// Issued time — always UTC for wndprb products.
+issued_line = {
+    issued_hhmm ~ "UTC" ~ day_of_week ~ month_abbr ~ issued_day ~ issued_year ~ nl
+}
+
+// ── Body: everything between the issued line and $$ ─────────────────────────
+// Parsed entirely in Rust to handle the flat OP(CP) probability format.
+
+body = { (!("$$") ~ ANY)+ }

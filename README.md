@@ -111,10 +111,10 @@ All dependency versions are pinned in `Cargo.lock`. The workspace-level
 
 | Product | AWIPS ID | Description |
 |---|---|---|
-| `fstadv` | `TCPxx` | Forecast/advisory — position, intensity, forecast track |
-| `public` | `TCMxx` | Public advisory — plain-language synopsis |
-| `discus` | `TCDxx` | Discussion — forecaster narrative |
-| `wndprb` | `PWOxx` | Wind probability — probabilities by location |
+| `fstadv` | `TCM` | Forecast/advisory — position, intensity, forecast track |
+| `public` | `TCP` | Public advisory — plain-language synopsis |
+| `discus` | `TCD` | Discussion — forecaster narrative |
+| `wndprb` | `PWS` | Wind speed probabilities — probabilities by location |
 
 Basins: **EP** (Eastern Pacific), **AL** (Atlantic), **CP** (Central Pacific).
 

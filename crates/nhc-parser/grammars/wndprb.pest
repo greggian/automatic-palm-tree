@@ -1,68 +1,90 @@
 // ─────────────────────────────────────────────────────────────────────────────
-// NHC Wind Speed Probabilities (wndprb / PWS) Grammar
+// Common NHC Advisory Grammar Rules
 //
-// The product body contains fixed-width tables grouped by wind threshold.
-// Each section is introduced by:
+// Shared tokens, envelope rules, and primitives used by all four product
+// grammars (fstadv, discus, public, wndprb).
 //
-//   PROBABILITIES OF 34 KT WINDS
-//                            FROM  12 HR 24 HR ...
-//                            NOW   END   END   ...
-//   LOCATION                 PROB  PROB  PROB  ...
+// This file is prepended to each product-specific *_rules.pest file by
+// build.rs to produce the final grammar consumed by pest_derive.
 //
-// Followed by rows, two lines per location:
-//
-//   ACAPULCO         MX  16.9N  99.9W
-//                            X    35    50    50    30    10     5     X
-//
-// "X" means < 1 % (stored as 0).
-//
-// Key design note: all identifier/number tokens are ATOMIC (@{}) so that
-// pest's implicit WHITESPACE rule cannot skip spaces inside them, preventing
-// greedy over-matching across word boundaries.
-//
-// The loc_line uses a lookahead-based loc_text rule to stop before the
-// coordinates, since location names can be multi-word (e.g. "PUERTO ANGEL").
+// Key design notes:
+// 1. All identifier/number tokens are ATOMIC (@{}) so that pest's implicit
+//    WHITESPACE rule cannot skip spaces inside them, preventing greedy
+//    over-matching across word boundaries.
+// 2. Every line rule ends with a mandatory `nl` (it consumes its own line
+//    ending).
 // ─────────────────────────────────────────────────────────────────────────────
 
+// Horizontal whitespace only (NOT newlines) — auto-inserted between tokens
 WHITESPACE = _{ " " | "\t" }
-nl         = _{ "\r\n" | "\n" | "\r" }
 
-// ── Atomic token primitives ───────────────────────────────────────────────────
+// Explicit newline — used only where line structure matters
+nl = _{ "\r\n" | "\n" | "\r" }
 
-integer        = @{ ASCII_DIGIT+ }
-decimal        = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
-advisory_num   = @{ ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
-storm_name     = @{ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
-storm_num_raw  = @{ ASCII_DIGIT+ }
-originator     = @{ ASCII_ALPHA_UPPER+ }
-ddhhmm         = @{ ASCII_DIGIT{6} }
-issued_hhmm    = @{ ASCII_DIGIT{4} }
-issued_day     = @{ ASCII_DIGIT{1,2} }
-issued_year    = @{ ASCII_DIGIT{4} }
-forecaster_name = @{ (ASCII_ALPHA_UPPER | "-")+ }
+// ── Atomic token primitives ─────────────────────────────────────────────────
+
+integer       = @{ ASCII_DIGIT+ }
+decimal       = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
+time_ref      = @{ ASCII_DIGIT{2} ~ "/" ~ ASCII_DIGIT{4} ~ "Z" }
+lat           = @{ decimal ~ ("N" | "S") }
+lon           = @{ decimal ~ ("E" | "W") }
+cardinal      = @{ (ASCII_ALPHA_UPPER | "-")+ }
+advisory_num  = @{ ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
+storm_name    = @{ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
+storm_num_raw = @{ ASCII_DIGIT+ }
+originator    = @{ ASCII_ALPHA_UPPER+ }
+ddhhmm        = @{ ASCII_DIGIT{6} | "DDHHMM" }
+issued_hhmm   = @{ ASCII_DIGIT{4} }
+issued_day    = @{ ASCII_DIGIT{1,2} }
+issued_year   = @{ ASCII_DIGIT{4} }
 
 month_abbr = {
     "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
     "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
 }
-day_of_week = { "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" }
+day_of_week = {
+    "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN"
+}
+
 // Longest-match first to avoid prefix ambiguity
 status = {
-    "POTENTIAL TROP CYCLONE" |
-    "POST-TROPICAL CYCLONE"  |
-    "TROPICAL CYCLONE"       |
-    "TROPICAL STORM"         |
-    "POST-TROPICAL"          |
-    "REMNANT LOW"            |
-    "HURRICANE"              |
+    "POTENTIAL TROPICAL CYCLONE" |
+    "POTENTIAL TROP CYCLONE"     |
+    "POST-TROPICAL CYCLONE"      |
+    "SUBTROPICAL STORM"          |
+    "TROPICAL DEPRESSION"        |
+    "TROPICAL CYCLONE"           |
+    "TROPICAL STORM"             |
+    "POST-TROPICAL"              |
+    "REMNANTS OF"                |
+    "REMNANT LOW"                |
+    "HURRICANE"                  |
     "DISSIPATED"
 }
-awips_id     = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
-product_code = { "TCM" | "TCP" | "TCD" | "PWS" }
-basin_code   = { "EP" | "AL" | "CP" }
-any_line     = { (!nl ~ ANY)* ~ nl }
 
-// ── Top-level ─────────────────────────────────────────────────────────────────
+// MIA = NHC Miami, HFO = CPHC Honolulu, NFD = Weather Prediction Center
+awips_id      = { ("MIA" | "HFO" | "NFD") ~ product_code ~ basin_code ~ storm_num_raw }
+product_code  = { "TCM" | "TCP" | "TCD" | "PWS" }
+basin_code    = { "EP" | "AL" | "AT" | "CP" }
+
+any_line = { (!nl ~ ANY)* ~ nl }
+
+// ── Shared envelope rules ───────────────────────────────────────────────────
+
+zczc_line       = { "ZCZC" ~ awips_id ~ "ALL" ~ ("CCA" | "CCB")? ~ nl }
+wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ ("CCA" | "CCB")? ~ nl }
+forecaster_line = { ^"Forecaster" ~ (!nl ~ ANY)* ~ nl? }
+nws_line        = { "NWS" ~ (!nl ~ ANY)* ~ nl }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Wind Speed Probabilities (wndprb / PWS) — product-specific rules
+// Prepended with common.pest by build.rs
+//
+// The 2025 format uses a flat single-table layout.  The body is captured
+// verbatim and parsed into typed entries entirely in Rust.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Top-level ───────────────────────────────────────────────────────────────
 
 wndprb = {
     SOI ~
@@ -71,75 +93,28 @@ wndprb = {
     nl* ~
     header_line ~
     nws_line ~
+    ("ISSUED" ~ (!nl ~ ANY)* ~ nl)? ~
     issued_line ~
-    nl* ~
-    (!"PROBABILITIES OF" ~ any_line)* ~   // "WIND SPEED PROBABILITIES..." intro
-    prob_section+ ~
-    nl* ~
+    body ~
     "$$" ~ nl ~
     forecaster_line ~
-    nl? ~ "NNNN" ~ nl? ~
+    nl* ~ "NNNN" ~ nl* ~
     EOI
 }
 
-// ── Envelope ──────────────────────────────────────────────────────────────────
+// ── Header ──────────────────────────────────────────────────────────────────
 
-zczc_line       = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
-wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
-forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
-
-// ── Header ────────────────────────────────────────────────────────────────────
-
-// "TROPICAL STORM FOUR-E WIND SPEED PROBABILITIES NUMBER   1"
 header_line = {
-    status ~ storm_name ~
-    "WIND SPEED PROBABILITIES" ~ "NUMBER" ~ advisory_num ~ nl
+    status ~ storm_name ~ nl? ~
+    ("SPECIAL")? ~ "WIND SPEED PROBABILITIES" ~ "NUMBER" ~ advisory_num ~ (!nl ~ ANY)* ~ nl
 }
 
-nws_line    = { "NWS" ~ (!nl ~ ANY)* ~ nl }
+// Issued time — always UTC for wndprb products.
 issued_line = {
     issued_hhmm ~ "UTC" ~ day_of_week ~ month_abbr ~ issued_day ~ issued_year ~ nl
 }
 
-// ── Probability table section ─────────────────────────────────────────────────
+// ── Body: everything between the issued line and $$ ─────────────────────────
+// Parsed entirely in Rust to handle the flat OP(CP) probability format.
 
-// "PROBABILITIES OF 34 KT WINDS"
-prob_section = {
-    section_header ~
-    col_header_lines ~
-    prob_row* ~
-    nl*
-}
-
-section_header = { "PROBABILITIES OF" ~ threshold_kt ~ "KT WINDS" ~ nl }
-threshold_kt   = { "64" | "50" | "34" }
-
-// The column header always has exactly 3 lines (FROM/NOW/LOCATION) plus a blank.
-col_header_lines = _{ any_line ~ any_line ~ any_line ~ nl }
-
-// Two-line location + probability pair
-prob_row = {
-    loc_line ~ nl ~
-    prob_values_line ~ nl
-}
-
-// "ACAPULCO         MX  16.9N  99.9W"
-//
-// loc_text is an atomic rule that consumes everything up to the first
-// occurrence of "  " (two spaces) followed by a decimal — which marks
-// the start of the coordinates.  This correctly handles multi-word
-// names such as "PUERTO ANGEL MX".
-loc_line = {
-    loc_text ~
-    decimal ~ lat_dir ~
-    decimal ~ lon_dir
-}
-// Stop at "  <decimal>" — the gap before the lat coordinate.
-loc_text = @{ (!("  " ~ decimal) ~ ANY)+ }
-lat_dir  = @{ "N" | "S" }
-lon_dir  = @{ "E" | "W" }
-
-// "                           X    35    50    50    30    10     5     X"
-// NHC produces 8 probability values; we extract the first 7 (12–120 HR windows).
-prob_values_line = { prob_value{7,8} }
-prob_value       = { integer | "X" }
+body = { (!("$$") ~ ANY)+ }

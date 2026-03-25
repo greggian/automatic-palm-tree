@@ -268,8 +268,17 @@ fn parse_forecast_block(
                 is_outlook = true;
                 let mut inner = p.into_inner();
                 valid_time = inner.next().unwrap().as_str().to_string();
-                fp_lat = Some(parse_lat_token(inner.next().unwrap().as_str())?);
-                fp_lon = Some(parse_lon_token(inner.next().unwrap().as_str())?);
+                let next = inner.next();
+                if let Some(pos) = next {
+                    if pos.as_rule() == Rule::lat {
+                        fp_lat = Some(parse_lat_token(pos.as_str())?);
+                        fp_lon = Some(parse_lon_token(inner.next().unwrap().as_str())?);
+                    } else {
+                        dissipated = true;
+                    }
+                } else {
+                    dissipated = true;
+                }
             }
             Rule::forecast_wind_line => {
                 let mut inner = p.into_inner();

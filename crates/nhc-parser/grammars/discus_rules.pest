@@ -1,0 +1,40 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Forecast Discussion (discus / TCD) — product-specific rules
+// Prepended with common.pest by build.rs
+//
+// The discussion is largely free-form prose followed by a structured
+// FORECAST POSITIONS table.  We parse only the envelope and header/issued-time
+// anchor lines; the full body is captured as raw text.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Top-level ───────────────────────────────────────────────────────────────
+
+discus = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    header_line ~
+    nws_line ~
+    ("ISSUED" ~ (!nl ~ ANY)* ~ nl)? ~
+    issued_line ~
+    body ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl* ~ "NNNN" ~ nl* ~
+    EOI
+}
+
+// ── Header ──────────────────────────────────────────────────────────────────
+
+header_line = {
+    status ~ storm_name ~
+    ("FORECAST" | "SPECIAL")? ~ "DISCUSSION" ~ "NUMBER" ~ advisory_num ~ (!nl ~ ANY)* ~ nl
+}
+
+// Issued time — can be UTC or local time, parsed as raw text in Rust.
+issued_line = { (!nl ~ ANY)* ~ nl }
+
+// ── Body: everything between the issued line and $$ ─────────────────────────
+
+body = { (!("$$") ~ ANY)+ }

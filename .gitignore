@@ -3,3 +3,10 @@
 *.egg-info/
 .pytest_cache/
 /target/
+nhc_data
+
+# Generated grammar files (built from common.pest + *_rules.pest by build.rs)
+crates/nhc-parser/grammars/fstadv.pest
+crates/nhc-parser/grammars/discus.pest
+crates/nhc-parser/grammars/public.pest
+crates/nhc-parser/grammars/wndprb.pest

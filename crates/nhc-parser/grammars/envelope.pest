@@ -28,21 +28,21 @@ zczc_line = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
 
 awips_id     = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
 product_code = { "TCM" | "TCP" | "TCD" | "PWS" }
-basin_code   = { "EP" | "AL" | "CP" }
+basin_code   = { "EP" | "AL" | "AT" | "CP" }
 storm_num_raw = { ASCII_DIGIT+ }
 
 // ── WMO routing header ────────────────────────────────────────────────────────
 
 wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
 originator      = { ASCII_ALPHA_UPPER+ }
-ddhhmm          = { ASCII_DIGIT{6} }
+ddhhmm          = { ASCII_DIGIT{6} | "DDHHMM" }
 
 // ── End-of-body / end-of-transmission ────────────────────────────────────────
 
 end_body = _{ nl ~ "$$" ~ (nl | EOI) }
 
 forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
-forecaster_name = { (ASCII_ALPHA_UPPER | "-")+ }
+forecaster_name = { (ASCII_ALPHA_UPPER | "-" | "/")+ }
 
 nnnn = _{ nl? ~ "NNNN" ~ (nl | EOI) }
 
@@ -73,13 +73,15 @@ cardinal = { (ASCII_ALPHA_UPPER | "-")+ }
 
 // Status strings (longest match first to avoid prefix ambiguity)
 status = {
-    "POTENTIAL TROP CYCLONE" |
-    "POST-TROPICAL CYCLONE"  |
-    "TROPICAL CYCLONE"       |
-    "TROPICAL STORM"         |
-    "POST-TROPICAL"          |
-    "REMNANT LOW"            |
-    "HURRICANE"              |
+    "POTENTIAL TROPICAL CYCLONE" |
+    "POTENTIAL TROP CYCLONE"     |
+    "POST-TROPICAL CYCLONE"      |
+    "TROPICAL DEPRESSION"        |
+    "TROPICAL CYCLONE"           |
+    "TROPICAL STORM"             |
+    "POST-TROPICAL"              |
+    "REMNANT LOW"                |
+    "HURRICANE"                  |
     "DISSIPATED"
 }
 

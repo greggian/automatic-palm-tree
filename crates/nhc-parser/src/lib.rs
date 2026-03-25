@@ -24,12 +24,14 @@ pub use error::ParseError;
 /// Parse any NHC advisory product.  The product type is auto-detected from
 /// the AWIPS ID in the ZCZC line.
 pub fn parse_advisory(raw: &str) -> Result<Advisory, ParseError> {
-    // Detect product type from AWIPS ID before full parse
-    let product_type = envelope::detect_product_type(raw)?;
+    // Normalise to uppercase so grammars work with both web-archive (mixed-case
+    // prose) and original operational (ALL-CAPS) advisory text.
+    let raw = raw.to_uppercase();
+    let product_type = envelope::detect_product_type(&raw)?;
     match product_type {
-        ProductType::Tcm => fstadv::parse(raw).map(Advisory::Fstadv),
-        ProductType::Tcp => public::parse(raw).map(Advisory::Public),
-        ProductType::Tcd => discus::parse(raw).map(Advisory::Discus),
-        ProductType::Pws => wndprb::parse(raw).map(Advisory::Wndprb),
+        ProductType::Tcm => fstadv::parse(&raw).map(Advisory::Fstadv),
+        ProductType::Tcp => public::parse(&raw).map(Advisory::Public),
+        ProductType::Tcd => discus::parse(&raw).map(Advisory::Discus),
+        ProductType::Pws => wndprb::parse(&raw).map(Advisory::Wndprb),
     }
 }

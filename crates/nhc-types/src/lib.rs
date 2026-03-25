@@ -58,6 +58,8 @@ pub enum Basin {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum StormStatus {
     PotentialTropicalCyclone,
+    SubtropicalStorm,
+    TropicalDepression,
     TropicalCyclone,
     TropicalStorm,
     Hurricane,
@@ -311,7 +313,9 @@ impl std::fmt::Display for Basin {
 impl std::fmt::Display for StormStatus {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {
-            StormStatus::PotentialTropicalCyclone => "POTENTIAL TROP CYCLONE",
+            StormStatus::PotentialTropicalCyclone => "POTENTIAL TROPICAL CYCLONE",
+            StormStatus::SubtropicalStorm => "SUBTROPICAL STORM",
+            StormStatus::TropicalDepression => "TROPICAL DEPRESSION",
             StormStatus::TropicalCyclone => "TROPICAL CYCLONE",
             StormStatus::TropicalStorm => "TROPICAL STORM",
             StormStatus::Hurricane => "HURRICANE",

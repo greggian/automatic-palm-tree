@@ -2,8 +2,10 @@
 //!
 //! Grammar spec: `grammars/wndprb.pest`
 //!
-//! Probability values are integer percentages; `"X"` encodes < 1 % and is
-//! stored as `0`.
+//! The 2025 format uses a flat table with entries of the form:
+//!   LOCATION_NAME  KT  OP  OP(CP)  OP(CP)  ...
+//! where OP is onset probability and CP is cumulative probability.
+//! We store CP values (and OP for the first 12-hr window where CP is absent).
 
 use chrono::{DateTime, TimeZone, Utc};
 use pest::Parser;
@@ -63,8 +65,8 @@ pub fn parse(raw: &str) -> Result<WindProbAdvisory, ParseError> {
                     }
                 }
             }
-            Rule::prob_section => {
-                tables.push(parse_prob_section(pair)?);
+            Rule::body => {
+                tables = parse_entries_from_body(pair.as_str());
             }
             _ => {}
         }
@@ -83,6 +85,8 @@ pub fn parse(raw: &str) -> Result<WindProbAdvisory, ParseError> {
         forecaster,
     })
 }
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
 
 fn extract_originator(text: &str) -> String {
     for line in text.lines() {
@@ -126,88 +130,96 @@ fn parse_issued_line(pair: &pest::iterators::Pair<Rule>) -> Result<DateTime<Utc>
         })
 }
 
-fn parse_prob_section(
-    pair: pest::iterators::Pair<Rule>,
-) -> Result<WindProbTable, ParseError> {
-    let mut threshold_kt = 0u8;
-    let mut entries: Vec<WindProbEntry> = Vec::new();
+// ── Body parsing for the flat OP(CP) probability table ───────────────────────
 
-    for p in pair.into_inner() {
-        match p.as_rule() {
-            Rule::section_header => {
-                for sp in p.into_inner() {
-                    if sp.as_rule() == Rule::threshold_kt {
-                        threshold_kt = sp.as_str().parse().unwrap_or(0);
-                    }
-                }
+/// Parse all probability entries from the body text and group by KT threshold.
+fn parse_entries_from_body(body: &str) -> Vec<WindProbTable> {
+    // Collect (kt, entry) pairs in order, then group by kt preserving order.
+    let mut by_kt: std::collections::BTreeMap<u8, Vec<WindProbEntry>> =
+        std::collections::BTreeMap::new();
+
+    for raw_line in body.lines() {
+        let line = raw_line.trim_end();
+        if line.is_empty() { continue; }
+
+        for kt in [34u8, 50, 64] {
+            if let Some((location, probs)) = try_parse_entry_line(line, kt) {
+                by_kt.entry(kt).or_default().push(WindProbEntry {
+                    location,
+                    lat: 0.0,
+                    lon: 0.0,
+                    probs,
+                });
+                break;
             }
-            Rule::prob_row => {
-                entries.push(parse_prob_row(p, threshold_kt)?);
-            }
-            _ => {}
         }
     }
 
-    Ok(WindProbTable { threshold_kt, entries })
+    by_kt.into_iter()
+        .map(|(kt, entries)| WindProbTable { threshold_kt: kt, entries })
+        .collect()
 }
 
-fn parse_prob_row(
-    pair: pest::iterators::Pair<Rule>,
-    _threshold_kt: u8,
-) -> Result<WindProbEntry, ParseError> {
-    let mut location = String::new();
-    let mut lat = 0.0f32;
-    let mut lon = 0.0f32;
-    let mut probs = [0u8; 7];
+/// Try to parse a line of the form "LOCATION_NAME  KT  OP  OP(CP)  ...".
+/// Returns `None` if the line doesn't look like a probability entry.
+fn try_parse_entry_line(line: &str, kt: u8) -> Option<(String, [u8; 7])> {
+    // Look for " KT  " (space + 2-digit threshold + at least two spaces).
+    // This avoids matching "34 KT" in the intro text (followed by " KT ").
+    let pattern = format!(" {}  ", kt);
+    let kt_pos = line.find(&pattern)?;
 
-    for p in pair.into_inner() {
-        match p.as_rule() {
-            Rule::loc_line => {
-                // loc_line children: loc_text, decimal, lat_dir, decimal, lon_dir
-                // loc_text = "ACAPULCO         MX" (name words + 2-letter CC, possibly padded)
-                let mut inner = p.into_inner();
-                let raw_text = inner.next().unwrap().as_str(); // loc_text
-                let lat_str  = inner.next().unwrap().as_str(); // decimal
-                let lat_ns   = inner.next().unwrap().as_str(); // lat_dir "N"|"S"
-                let lon_str  = inner.next().unwrap().as_str(); // decimal
-                let lon_ew   = inner.next().unwrap().as_str(); // lon_dir "E"|"W"
-
-                // Split loc_text by whitespace; last token is the 2-letter CC,
-                // everything before is the name.
-                let parts: Vec<&str> = raw_text.split_whitespace().collect();
-                if parts.len() >= 2 {
-                    let cc   = *parts.last().unwrap();
-                    let name = parts[..parts.len() - 1].join(" ");
-                    location = format!("{} {}", name, cc);
-                } else {
-                    location = raw_text.trim().to_string();
-                }
-
-                let lat_v: f32 = lat_str.parse().unwrap_or(0.0);
-                let lon_v: f32 = lon_str.parse().unwrap_or(0.0);
-                lat = if lat_ns == "S" { -lat_v } else { lat_v };
-                lon = if lon_ew == "W" { -lon_v } else { lon_v };
-            }
-            Rule::prob_values_line => {
-                let mut i = 0;
-                for vp in p.into_inner() {
-                    if i >= 7 { break; }
-                    probs[i] = if vp.as_str() == "X" {
-                        0
-                    } else {
-                        vp.as_str().parse().unwrap_or(0)
-                    };
-                    i += 1;
-                }
-            }
-            _ => {}
-        }
+    let location = line[..kt_pos].trim();
+    // Location must start with an alphanumeric character (filters out "..." intro lines).
+    if location.is_empty()
+        || !location.chars().next().map(|c| c.is_ascii_alphanumeric()).unwrap_or(false)
+    {
+        return None;
     }
 
-    Ok(WindProbEntry {
-        location,
-        lat,
-        lon,
-        probs,
-    })
+    let prob_str = &line[kt_pos + pattern.len()..];
+    let probs = parse_prob_tokens(prob_str.trim());
+    Some((location.to_string(), probs))
+}
+
+/// Parse probability tokens from a string of the form:
+///   `X   X( X)   X( X)   X( X)   2( 2)   1( 3)   X( 3)`
+///
+/// The first token is OP-only (no cumulative); subsequent tokens are `OP(CP)`.
+/// We store CP for windows 2–7 and OP for window 1.  `X` → 0.
+fn parse_prob_tokens(s: &str) -> [u8; 7] {
+    let mut probs = [0u8; 7];
+    let tokens: Vec<&str> = s.split_whitespace().collect();
+    let mut out_idx = 0;
+    let mut tok_idx = 0;
+
+    while tok_idx < tokens.len() && out_idx < 7 {
+        let t = tokens[tok_idx];
+        if t.ends_with('(') {
+            // "OP(" — next token is "CP)"
+            tok_idx += 1;
+            if tok_idx < tokens.len() {
+                let cp = tokens[tok_idx].trim_end_matches(')');
+                probs[out_idx] = parse_prob_val(cp);
+                out_idx += 1;
+            }
+        } else if t.contains('(') {
+            // "OP(CP)" all in one token (rare, defensive)
+            if let Some(start) = t.find('(') {
+                let cp = t[start + 1..].trim_end_matches(')');
+                probs[out_idx] = parse_prob_val(cp);
+                out_idx += 1;
+            }
+        } else {
+            // Plain OP value (first window has no cumulative)
+            probs[out_idx] = parse_prob_val(t);
+            out_idx += 1;
+        }
+        tok_idx += 1;
+    }
+
+    probs
+}
+
+fn parse_prob_val(s: &str) -> u8 {
+    if s == "X" { 0 } else { s.parse().unwrap_or(0) }
 }

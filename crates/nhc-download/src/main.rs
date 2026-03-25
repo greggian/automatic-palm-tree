@@ -52,8 +52,14 @@ static RE_TAG: LazyLock<Regex> = LazyLock::new(|| {
 static RE_YEAR: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"href="(\d{4})/""#).unwrap()
 });
-static RE_STORM: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"(?i)href="([a-z]{2}\d{2})/""#).unwrap()
+/// Matches storm-name page links on year index, e.g. href="ANDREA.shtml" or href="ANDREA.shtml?"
+static RE_STORM_NAME: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"href="([A-Z]{3,}(?:-[A-Z]+)*)\.shtml"#).unwrap()
+});
+/// Extracts basin dir from absolute advisory paths on storm name pages,
+/// e.g. /archive/2025/al01/al012025.fstadv.001.shtml → "al01"
+static RE_BASIN_DIR: LazyLock<Regex> = LazyLock::new(|| {
+    Regex::new(r#"/archive/\d+/([a-z]{2}\d{2})/"#).unwrap()
 });
 static RE_FILE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
@@ -188,21 +194,43 @@ async fn discover_years(client: &Client) -> Result<Vec<u32>> {
 
 /// Return `(basin_dir, storm_id)` pairs for every storm in `year`.
 /// `basin_dir` = e.g. `"ep04"`, `storm_id` = e.g. `"ep042025"`.
+///
+/// The NHC year index lists storms by name (e.g. `href="ANDREA.shtml"`).
+/// Each named storm page contains absolute advisory links from which we
+/// extract the numbered basin directory (e.g. `al01`).
 async fn discover_storms(
     client: &Client,
     year: u32,
     basins: &HashSet<String>,
 ) -> Result<Vec<(String, String)>> {
     let html = fetch(client, &format!("{BASE_URL}/{year}/")).await?;
-    let storms = RE_STORM
+
+    let storm_names: Vec<String> = RE_STORM_NAME
         .captures_iter(&html)
-        .map(|c| c[1].to_lowercase())
-        .filter(|bd| basins.contains(&bd[..2]))
-        .map(|bd| {
-            let storm_id = format!("{bd}{year}");
-            (bd, storm_id)
-        })
+        .map(|c| c[1].to_string())
         .collect();
+
+    let mut seen = std::collections::HashSet::new();
+    let mut storms = Vec::new();
+
+    for name in storm_names {
+        let storm_url = format!("{BASE_URL}/{year}/{name}.shtml");
+        let storm_html = match fetch(client, &storm_url).await {
+            Ok(h) => h,
+            Err(e) => {
+                eprintln!("  Warning: could not fetch storm page {name}: {e}");
+                continue;
+            }
+        };
+        if let Some(cap) = RE_BASIN_DIR.captures(&storm_html) {
+            let bd = cap[1].to_lowercase();
+            if basins.contains(&bd[..2]) && seen.insert(bd.clone()) {
+                let storm_id = format!("{bd}{year}");
+                storms.push((bd, storm_id));
+            }
+        }
+    }
+
     Ok(storms)
 }
 

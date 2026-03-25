@@ -1,0 +1,87 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Public Advisory (public / TCP) — product-specific rules
+// Prepended with common.pest by build.rs
+// Values are in mph and km/h as issued (not knots).
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ── Top-level ───────────────────────────────────────────────────────────────
+
+public_adv = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    ("BULLETIN" ~ nl)? ~
+    header_line ~
+    nws_line ~
+    ("ISSUED" ~ (!nl ~ ANY)* ~ nl)? ~
+    issued_line ~
+    nl* ~
+    ("CORRECTED" ~ (!nl ~ ANY)* ~ nl ~ nl*)? ~  // optional correction note
+    headline? ~
+    (!"LOCATION" ~ any_line)* ~      // "SUMMARY OF..." header + dashes
+    location_line ~
+    (!"MAXIMUM" ~ any_line)* ~       // "ABOUT N MI..." distance lines (zero or more)
+    wind_line ~
+    movement_line ~
+    pressure_line ~
+    nl* ~
+    body_prose ~
+    next_advisory_section ~
+    nl* ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl* ~ ("NNNN" ~ nl*)? ~
+    EOI
+}
+
+// ── Header ──────────────────────────────────────────────────────────────────
+
+header_line = {
+    status ~ storm_name ~
+    ("PUBLIC")? ~ ("SPECIAL")? ~ "ADVISORY" ~ "NUMBER" ~ advisory_num ~ (!nl ~ ANY)* ~ nl
+}
+
+// Issued time — UTC or local time, parsed as raw text in Rust.
+issued_line = { (!nl ~ ANY)* ~ nl }
+
+// "...FOUR-E BECOMES A TROPICAL STORM..."
+headline      = { "..." ~ headline_text ~ "..." ~ nl }
+headline_text = @{ (!(nl | "...") ~ ANY)+ }
+
+// ── Summary block ───────────────────────────────────────────────────────────
+
+location_line = { "LOCATION" ~ "..." ~ lat ~ lon ~ nl }
+
+// "MAXIMUM SUSTAINED WINDS...45 MPH...75 KM/H"
+wind_line = { "MAXIMUM SUSTAINED WINDS" ~ "..." ~ integer ~ "MPH" ~ "..." ~ integer ~ "KM/H" ~ nl }
+
+// "PRESENT MOVEMENT...WNW OR 285 DEGREES AT 9 MPH...15 KM/H"
+// "PRESENT MOVEMENT...STATIONARY"
+movement_line = {
+    "PRESENT MOVEMENT" ~ "..." ~
+    (cardinal ~ "OR" ~ integer ~ "DEGREES AT" ~
+     integer ~ "MPH" ~ "..." ~ integer ~ "KM/H" |
+     "STATIONARY") ~ nl
+}
+
+// "MINIMUM CENTRAL PRESSURE...999 MB...29.50 INCHES"
+pressure_line = {
+    "MINIMUM CENTRAL PRESSURE" ~ "..." ~ integer ~ "MB" ~
+    "..." ~ decimal ~ "INCHES" ~ nl
+}
+
+// ── Prose and next advisory ─────────────────────────────────────────────────
+
+body_prose = { (!("NEXT ADVISORY" | "$$") ~ any_line)* }
+
+next_advisory_section = {
+    "NEXT ADVISORY" ~ nl ~
+    ("-"+ ~ nl)? ~
+    (!"$$" ~ any_line)*
+}
+
+// Gust line found inside body prose (extracted by Rust, not walked in grammar)
+gust_capture = {
+    "WITH GUSTS TO" ~ integer ~ "MPH" ~ "(" ~ integer ~ "KM/H" ~ ")" ~ "."?
+}

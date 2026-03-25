@@ -4,7 +4,7 @@
 //!
 //! Values are in **mph and km/h** as issued (not knots).
 
-use chrono::{DateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use pest::Parser;
 use pest_derive::Parser;
 
@@ -14,6 +14,60 @@ use crate::envelope::{
     build_wmo_header, extract_awips_id, extract_forecaster,
     parse_lat_token, parse_lon_token, parse_month_abbr, parse_status,
 };
+
+/// Scan text for a `DD/HHmmZ` time reference and return the first match.
+fn find_time_ref(text: &str) -> Option<String> {
+    for part in text.split_whitespace() {
+        let p = part.trim_end_matches('.');
+        if p.len() == 8 && p.contains('/') && p.ends_with('Z') {
+            let sides: Vec<&str> = p.splitn(2, '/').collect();
+            if sides.len() == 2
+                && sides[0].len() == 2
+                && sides[0].chars().all(|c| c.is_ascii_digit())
+                && sides[1].len() == 5
+                && sides[1][..4].chars().all(|c| c.is_ascii_digit())
+            {
+                return Some(p.to_string());
+            }
+        }
+    }
+    None
+}
+
+/// Parse an issued-time line that may be UTC or local time.
+fn parse_issued_from_str(s: &str) -> (chrono::DateTime<chrono::Utc>, u16) {
+    use chrono::{TimeZone, Utc};
+    let upper = s.trim().to_uppercase();
+    let parts: Vec<&str> = upper.split_whitespace().collect();
+
+    let year: i32 = parts.iter()
+        .filter_map(|p| p.parse().ok())
+        .find(|&y: &i32| y >= 2000 && y <= 2100)
+        .unwrap_or(0);
+
+    let month: u32 = parts.iter()
+        .find_map(|p| parse_month_abbr(p).ok())
+        .unwrap_or(1);
+
+    let day: u32 = parts.iter()
+        .filter_map(|p| p.parse::<u32>().ok())
+        .find(|&d| d >= 1 && d <= 31)
+        .unwrap_or(1);
+
+    let hhmm_str = parts.iter()
+        .find(|p| p.len() == 4 && p.chars().all(|c| c.is_ascii_digit()));
+    let (hour, min) = if let Some(t) = hhmm_str {
+        (t[..2].parse::<u32>().unwrap_or(0), t[2..].parse::<u32>().unwrap_or(0))
+    } else {
+        (0, 0)
+    };
+
+    let dt = Utc.with_ymd_and_hms(year, month, day, hour, min, 0)
+        .single()
+        .unwrap_or_else(|| Utc.with_ymd_and_hms(year.max(1970), 1, 1, 0, 0, 0).unwrap());
+
+    (dt, year as u16)
+}
 use crate::error::ParseError;
 
 #[derive(Parser)]
@@ -67,12 +121,9 @@ pub fn parse(raw: &str) -> Result<PublicAdvisory, ParseError> {
                 }
             }
             Rule::issued_line => {
-                issued_utc = Some(parse_issued_line(&pair)?);
-                for p in pair.into_inner() {
-                    if p.as_rule() == Rule::issued_year {
-                        issued_year = p.as_str().parse().unwrap_or(0);
-                    }
-                }
+                let (dt, yr) = parse_issued_from_str(pair.as_str());
+                issued_utc = Some(dt);
+                issued_year = yr;
             }
             Rule::headline => {
                 let text_pair = pair.into_inner().next();
@@ -92,10 +143,15 @@ pub fn parse(raw: &str) -> Result<PublicAdvisory, ParseError> {
             }
             Rule::movement_line => {
                 let mut inner = pair.into_inner();
-                movement_cardinal = inner.next().unwrap().as_str().to_string();
-                movement_degrees  = inner.next().unwrap().as_str().parse().unwrap_or(0);
-                movement_mph      = inner.next().unwrap().as_str().parse().unwrap_or(0);
-                movement_kmh      = inner.next().unwrap().as_str().parse().unwrap_or(0);
+                if let Some(first) = inner.next() {
+                    if first.as_rule() == Rule::cardinal {
+                        movement_cardinal = first.as_str().to_string();
+                        movement_degrees  = inner.next().unwrap().as_str().parse().unwrap_or(0);
+                        movement_mph      = inner.next().unwrap().as_str().parse().unwrap_or(0);
+                        movement_kmh      = inner.next().unwrap().as_str().parse().unwrap_or(0);
+                    }
+                    // else: STATIONARY — all movement fields stay at defaults (0)
+                }
             }
             Rule::pressure_line => {
                 let mut inner = pair.into_inner();
@@ -109,15 +165,7 @@ pub fn parse(raw: &str) -> Result<PublicAdvisory, ParseError> {
                 }
             }
             Rule::next_advisory_section => {
-                for p in pair.into_inner() {
-                    if p.as_rule() == Rule::next_advisory_line {
-                        for inner_p in p.into_inner() {
-                            if inner_p.as_rule() == Rule::time_ref {
-                                next_advisory_utc = Some(inner_p.as_str().to_string());
-                            }
-                        }
-                    }
-                }
+                next_advisory_utc = find_time_ref(pair.as_str());
             }
             _ => {}
         }
@@ -161,35 +209,6 @@ fn extract_originator(text: &str) -> String {
     "KNHC".to_string()
 }
 
-fn parse_issued_line(pair: &pest::iterators::Pair<Rule>) -> Result<DateTime<Utc>, ParseError> {
-    let mut hhmm = 0u32;
-    let mut month = 0u32;
-    let mut day = 0u32;
-    let mut year = 0i32;
-
-    for p in pair.clone().into_inner() {
-        match p.as_rule() {
-            Rule::issued_hhmm => {
-                let s = p.as_str();
-                hhmm = s[..2].parse::<u32>().unwrap_or(0) * 100
-                    + s[2..4].parse::<u32>().unwrap_or(0);
-            }
-            Rule::month_abbr => month = parse_month_abbr(p.as_str())?,
-            Rule::issued_day  => day  = p.as_str().trim().parse().unwrap_or(0),
-            Rule::issued_year => year = p.as_str().trim().parse().unwrap_or(0),
-            _ => {}
-        }
-    }
-
-    let hour = hhmm / 100;
-    let min  = hhmm % 100;
-    Utc.with_ymd_and_hms(year, month, day, hour, min, 0)
-        .single()
-        .ok_or(ParseError::InvalidValue {
-            field: "issued_utc",
-            value: format!("{year}-{month}-{day} {hour}:{min}"),
-        })
-}
 
 /// Scan body prose for "WITH GUSTS TO N MPH (M KM/H)" pattern.
 /// The value may appear on the next line after "TO" in actual advisories.

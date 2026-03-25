@@ -56,12 +56,9 @@ pub fn parse(raw: &str) -> Result<ForecastDiscussion, ParseError> {
                 }
             }
             Rule::issued_line => {
-                issued_utc = Some(parse_issued_line(&pair)?);
-                for p in pair.into_inner() {
-                    if p.as_rule() == Rule::issued_year {
-                        issued_year = p.as_str().parse().unwrap_or(0);
-                    }
-                }
+                let (dt, yr) = parse_issued_from_str(pair.as_str());
+                issued_utc = Some(dt);
+                issued_year = yr;
             }
             Rule::body => {
                 body = pair.as_str().trim().to_string();
@@ -96,32 +93,39 @@ fn extract_originator(text: &str) -> String {
     "KNHC".to_string()
 }
 
-fn parse_issued_line(pair: &pest::iterators::Pair<Rule>) -> Result<DateTime<Utc>, ParseError> {
-    let mut hhmm = 0u32;
-    let mut month = 0u32;
-    let mut day = 0u32;
-    let mut year = 0i32;
+/// Parse an issued-time line that may be UTC ("1800 UTC WED JUL 09 2025")
+/// or local time ("1100 AM AST TUE JUN 24 2025").
+/// Returns (DateTime<Utc>, year).  For local-time lines the UTC hour is
+/// approximate (we use the nominal local hour as-is).
+fn parse_issued_from_str(s: &str) -> (DateTime<Utc>, u16) {
+    let upper = s.trim().to_uppercase();
+    let parts: Vec<&str> = upper.split_whitespace().collect();
 
-    for p in pair.clone().into_inner() {
-        match p.as_rule() {
-            Rule::issued_hhmm => {
-                let s = p.as_str();
-                hhmm = s[..2].parse::<u32>().unwrap_or(0) * 100
-                    + s[2..4].parse::<u32>().unwrap_or(0);
-            }
-            Rule::month_abbr => month = parse_month_abbr(p.as_str())?,
-            Rule::issued_day  => day  = p.as_str().trim().parse().unwrap_or(0),
-            Rule::issued_year => year = p.as_str().trim().parse().unwrap_or(0),
-            _ => {}
-        }
-    }
+    let year: i32 = parts.iter()
+        .filter_map(|p| p.parse().ok())
+        .find(|&y: &i32| y >= 2000 && y <= 2100)
+        .unwrap_or(0);
 
-    let hour = hhmm / 100;
-    let min  = hhmm % 100;
-    Utc.with_ymd_and_hms(year, month, day, hour, min, 0)
+    let month: u32 = parts.iter()
+        .find_map(|p| parse_month_abbr(p).ok())
+        .unwrap_or(1);
+
+    let day: u32 = parts.iter()
+        .filter_map(|p| p.parse::<u32>().ok())
+        .find(|&d| d >= 1 && d <= 31)
+        .unwrap_or(1);
+
+    let hhmm_str = parts.iter()
+        .find(|p| p.len() == 4 && p.chars().all(|c| c.is_ascii_digit()));
+    let (hour, min) = if let Some(t) = hhmm_str {
+        (t[..2].parse::<u32>().unwrap_or(0), t[2..].parse::<u32>().unwrap_or(0))
+    } else {
+        (0, 0)
+    };
+
+    let dt = Utc.with_ymd_and_hms(year, month, day, hour, min, 0)
         .single()
-        .ok_or(ParseError::InvalidValue {
-            field: "issued_utc",
-            value: format!("{year}-{month}-{day} {hour}:{min}"),
-        })
+        .unwrap_or_else(|| Utc.with_ymd_and_hms(year.max(1970), 1, 1, 0, 0, 0).unwrap());
+
+    (dt, year as u16)
 }

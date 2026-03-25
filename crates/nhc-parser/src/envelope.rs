@@ -29,9 +29,11 @@ pub fn extract_awips_id(raw: &str) -> Result<String, ParseError> {
 /// Parse AWIPS ID into (ProductType, Basin, storm_number).
 pub fn parse_awips(awips_id: &str) -> Result<(ProductType, Basin, u8), ParseError> {
     let id = awips_id.to_uppercase();
-    let rest = id.strip_prefix("MIA").ok_or_else(|| {
-        ParseError::UnknownAwips(awips_id.to_string())
-    })?;
+    // MIA = NHC Miami, HFO = CPHC Honolulu, NFD = Weather Prediction Center
+    let rest = id.strip_prefix("MIA")
+        .or_else(|| id.strip_prefix("HFO"))
+        .or_else(|| id.strip_prefix("NFD"))
+        .ok_or_else(|| ParseError::UnknownAwips(awips_id.to_string()))?;
 
     let product_type = if let Some(r) = rest.strip_prefix("TCM") {
         ("TCM", r, ProductType::Tcm)
@@ -132,12 +134,14 @@ pub fn parse_lon_token(s: &str) -> Result<f32, ParseError> {
 pub fn parse_status(s: &str) -> Result<nhc_types::StormStatus, ParseError> {
     use nhc_types::StormStatus;
     match s.trim() {
-        "POTENTIAL TROP CYCLONE"  => Ok(StormStatus::PotentialTropicalCyclone),
+        "POTENTIAL TROPICAL CYCLONE" | "POTENTIAL TROP CYCLONE" => Ok(StormStatus::PotentialTropicalCyclone),
+        "SUBTROPICAL STORM"       => Ok(StormStatus::SubtropicalStorm),
+        "TROPICAL DEPRESSION"     => Ok(StormStatus::TropicalDepression),
         "TROPICAL CYCLONE"        => Ok(StormStatus::TropicalCyclone),
         "TROPICAL STORM"          => Ok(StormStatus::TropicalStorm),
         "HURRICANE"               => Ok(StormStatus::Hurricane),
         "POST-TROPICAL CYCLONE" | "POST-TROPICAL" => Ok(StormStatus::PostTropical),
-        "REMNANT LOW"             => Ok(StormStatus::RemnantLow),
+        "REMNANT LOW" | "REMNANTS OF" => Ok(StormStatus::RemnantLow),
         "DISSIPATED"              => Ok(StormStatus::Dissipated),
         other => Err(ParseError::UnknownStatus(other.to_string())),
     }
