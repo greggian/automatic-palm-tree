@@ -3,6 +3,8 @@ members = [
     "crates/nhc-types",
     "crates/nhc-parser",
     "crates/nhc-ingest",
+    "crates/nhc-download",
+    "crates/nhc-validate",
 ]
 resolver = "2"
 
@@ -37,3 +39,12 @@ anyhow     = "1"
 
 # Config
 config = "0.15"
+
+# CLI
+clap = { version = "4", features = ["derive"] }
+
+# Regex
+regex = "1"
+
+# Directory traversal
+walkdir = "2"

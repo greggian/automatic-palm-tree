@@ -1,0 +1,15 @@
+[package]
+name = "nhc-download"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "nhc-download"
+path = "src/main.rs"
+
+[dependencies]
+tokio   = { workspace = true }
+reqwest = { workspace = true }
+clap    = { workspace = true }
+regex   = { workspace = true }
+anyhow  = { workspace = true }
