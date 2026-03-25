@@ -1,0 +1,38 @@
+ZCZC MIAPWSEP4 ALL
+TTAA00 KNHC 151800
+
+TROPICAL STORM DALILA WIND SPEED PROBABILITIES NUMBER  14
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+1800 UTC TUE JUL 15 2025
+
+WIND SPEED PROBABILITIES FOR SPECIFIC LOCATIONS
+
+PROBABILITIES OF 34 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+CABO SAN LUCAS   MX  22.9N 109.9W
+                           X     X     X     X     X     X     X     X
+ENSENADA         MX  31.9N 116.6W
+                           X     X     X     X     X     X     X     X
+
+PROBABILITIES OF 50 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+CABO SAN LUCAS   MX  22.9N 109.9W
+                           X     X     X     X     X     X     X     X
+
+PROBABILITIES OF 64 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+CABO SAN LUCAS   MX  22.9N 109.9W
+                           X     X     X     X     X     X     X     X
+
+$$
+Forecaster ROBERTS
+NNNN

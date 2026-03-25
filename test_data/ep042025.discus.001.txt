@@ -1,0 +1,39 @@
+ZCZC MIATCDEP4 ALL
+TTAA00 KNHC 091800
+
+TROPICAL STORM FOUR-E FORECAST DISCUSSION NUMBER   1
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+1800 UTC WED JUL 09 2025
+
+A vigorous area of convection associated with a broad surface low
+pressure system has organized sufficiently over the past 12 hours
+to be designated as Tropical Storm Four-E.  Satellite data indicate
+that a low-level circulation has consolidated near 13.5N 98.5W.
+Deep convection is well-organized with banding features developing
+on the northern and western sides of the circulation.
+
+FOUR-E is moving westward to west-northwestward and this general
+motion is expected to continue for the next 72 hours or so as the
+storm is steered by a subtropical ridge to the north.  After that
+time, an approaching trough could cause the storm to curve more to
+the north or northwest.
+
+The intensity forecast calls for gradual strengthening during the
+next few days as Four-E moves over warm sea surface temperatures
+(29-30 degrees C) and in a low wind shear environment.  The system
+could reach hurricane strength in about 48-60 hours.  Thereafter,
+increasing shear and cooler SSTs are expected to induce weakening.
+
+FORECAST POSITIONS AND MAX WINDS
+
+INIT  09/1800Z 13.5N  98.5W   40 KT  45 MPH
+ 12H  10/0600Z 14.2N 100.4W   45 KT  50 MPH
+ 24H  10/1800Z 14.8N 102.2W   50 KT  60 MPH
+ 48H  11/1800Z 15.5N 105.5W   65 KT  75 MPH
+ 72H  12/1800Z 16.2N 108.5W   55 KT  65 MPH
+ 96H  14/1800Z 17.0N 112.0W   35 KT  40 MPH
+120H  16/1800Z 17.5N 115.5W   30 KT  35 MPH
+
+$$
+Forecaster LATTO
+NNNN

@@ -1,0 +1,34 @@
+ZCZC MIATCDEP4 ALL
+TTAA00 KNHC 151800
+
+TROPICAL STORM DALILA FORECAST DISCUSSION NUMBER  14
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+1800 UTC TUE JUL 15 2025
+
+Dalila has weakened considerably since peak intensity on Saturday
+as it has moved into an environment of increasing vertical wind
+shear and markedly cooler sea surface temperatures.  The current
+SSTs beneath the storm are around 24-25 degrees C, well below what
+is needed to sustain tropical convection.  The convective
+organization has decreased dramatically and the low-level
+circulation is becoming more difficult to identify in satellite
+imagery.
+
+The track guidance is in good agreement, showing continued
+west-northwestward motion over the next 24-36 hours.  Dalila should
+degenerate into a remnant low by tomorrow evening as deep convection
+associated with the circulation dissipates entirely.
+
+No interests in the Eastern Pacific need to monitor Dalila at this
+time.
+
+FORECAST POSITIONS AND MAX WINDS
+
+INIT  15/1800Z 17.2N 117.8W   35 KT  40 MPH
+ 12H  16/0600Z 17.5N 119.4W   30 KT  35 MPH
+ 24H  16/1800Z 17.8N 121.0W   25 KT  30 MPH
+ 48H  17/1800Z...DISSIPATED
+
+$$
+Forecaster ROBERTS
+NNNN

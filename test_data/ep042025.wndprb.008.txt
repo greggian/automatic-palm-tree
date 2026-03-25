@@ -1,0 +1,58 @@
+ZCZC MIAPWSEP4 ALL
+TTAA00 KNHC 121800
+
+HURRICANE DALILA WIND SPEED PROBABILITIES NUMBER   8
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+1800 UTC SAT JUL 12 2025
+
+WIND SPEED PROBABILITIES FOR SPECIFIC LOCATIONS
+
+PROBABILITIES OF 34 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+MANZANILLO       MX  19.1N 104.3W
+                          20    55    70    65    35    10     X     X
+LAZARO CARDENAS  MX  17.9N 102.2W
+                          30    65    75    65    30     5     X     X
+ZIHUATANEJO      MX  17.6N 101.5W
+                          35    70    75    60    25     5     X     X
+ACAPULCO         MX  16.9N  99.9W
+                          15    45    60    50    20     5     X     X
+CABO SAN LUCAS   MX  22.9N 109.9W
+                           X     5    15    20    10     X     X     X
+
+PROBABILITIES OF 50 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+MANZANILLO       MX  19.1N 104.3W
+                           5    30    50    45    15     X     X     X
+LAZARO CARDENAS  MX  17.9N 102.2W
+                          10    45    60    50    15     X     X     X
+ZIHUATANEJO      MX  17.6N 101.5W
+                          15    50    60    45    10     X     X     X
+ACAPULCO         MX  16.9N  99.9W
+                           5    25    40    35     5     X     X     X
+CABO SAN LUCAS   MX  22.9N 109.9W
+                           X     X     5     5     X     X     X     X
+
+PROBABILITIES OF 64 KT WINDS
+                         FROM  12 HR 24 HR 36 HR 48 HR 72 HR 96 HR 120HR
+                         NOW   END   END   END   END   END   END    END
+LOCATION                 PROB  PROB  PROB  PROB  PROB  PROB  PROB   PROB
+
+MANZANILLO       MX  19.1N 104.3W
+                           X    10    25    20     5     X     X     X
+LAZARO CARDENAS  MX  17.9N 102.2W
+                           X    20    35    30     5     X     X     X
+ZIHUATANEJO      MX  17.6N 101.5W
+                           X    25    35    25     5     X     X     X
+ACAPULCO         MX  16.9N  99.9W
+                           X     5    15    15     X     X     X     X
+
+$$
+Forecaster BERG
+NNNN

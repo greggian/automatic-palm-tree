@@ -1,0 +1,41 @@
+ZCZC MIATCDEP4 ALL
+TTAA00 KNHC 121800
+
+HURRICANE DALILA FORECAST DISCUSSION NUMBER   8
+NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+1800 UTC SAT JUL 12 2025
+
+Dalila has reached hurricane strength with maximum sustained winds
+estimated at 80 kt based on objective satellite intensity estimates
+(SATCON, ADT, DMINT) and a subjective analysis of the latest
+satellite imagery.  Microwave imagery from earlier today shows a
+well-defined warm core structure and deep convection surrounding
+the circulation center.  A small eye feature is apparent in the
+latest infrared imagery.
+
+The storm continues on a westward to west-northwestward track,
+steered by a deep-layer subtropical ridge.  Increasing vertical
+wind shear associated with an approaching mid-latitude trough is
+expected to cause steady weakening after 24 hours.  Sea surface
+temperatures ahead of the storm are running 1-2 degrees below
+normal for this time of year, which will also contribute to the
+expected weakening trend.
+
+The NHC track guidance is in reasonable agreement through 72 hours.
+The models diverge more significantly at the longer time ranges as
+the interaction with the trough becomes more important.  The NHC
+forecast closely follows the multi-model consensus.
+
+FORECAST POSITIONS AND MAX WINDS
+
+INIT  12/1800Z 15.8N 107.2W   80 KT  90 MPH
+ 12H  13/0600Z 16.1N 109.2W   75 KT  85 MPH
+ 24H  13/1800Z 16.4N 111.2W   65 KT  75 MPH
+ 48H  14/1800Z 16.8N 114.2W   50 KT  60 MPH
+ 72H  15/1800Z 17.2N 117.5W   35 KT  40 MPH
+ 96H  17/1800Z 17.8N 121.5W   25 KT  30 MPH
+120H  19/1800Z 18.0N 125.0W   20 KT  25 MPH
+
+$$
+Forecaster BERG
+NNNN
