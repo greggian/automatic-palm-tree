@@ -3,6 +3,100 @@
 Rust workspace for downloading and parsing National Hurricane Center (NHC)
 tropical cyclone advisories.
 
+## Prerequisites
+
+### Rust toolchain
+
+Rust **1.80 or later** is required (`LazyLock` stabilised in 1.80).
+
+```sh
+# Install via rustup (https://rustup.rs)
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Or update an existing installation
+rustup update stable
+```
+
+Verify:
+
+```sh
+rustc --version   # rustc 1.80.0 or newer
+cargo --version
+```
+
+### OpenSSL (Linux / macOS)
+
+`reqwest` (used by `nhc-download`) links against the system OpenSSL.
+
+| Platform | Install |
+|---|---|
+| Ubuntu / Debian | `sudo apt install pkg-config libssl-dev` |
+| Fedora / RHEL | `sudo dnf install openssl-devel` |
+| macOS (Homebrew) | `brew install openssl` |
+| Windows | Use [`rustls`](https://github.com/rustls/rustls) feature or install via [vcpkg](https://github.com/microsoft/vcpkg) |
+
+> **Note:** If you prefer to avoid the OpenSSL dependency entirely, switch
+> the `reqwest` workspace dependency to use the `rustls-tls` feature instead
+> of the default native-tls.
+
+### PostgreSQL (nhc-ingest only)
+
+`nhc-ingest` uses `sqlx` to write parsed advisories to a PostgreSQL database.
+A running Postgres instance is only needed if you run `nhc-ingest`; the
+download and validate tools have no database dependency.
+
+```sh
+# Ubuntu / Debian
+sudo apt install postgresql
+
+# macOS (Homebrew)
+brew install postgresql@16
+```
+
+---
+
+## Building
+
+Build everything in the workspace:
+
+```sh
+cargo build --release
+```
+
+Or build individual crates:
+
+```sh
+cargo build -p nhc-download --release
+cargo build -p nhc-validate --release
+cargo build -p nhc-ingest   --release
+```
+
+Release binaries land in `target/release/`.
+
+### Run the test suite
+
+```sh
+cargo test
+# or just the parser tests
+cargo test -p nhc-parser
+```
+
+---
+
+## Dependency overview
+
+| Crate | Key dependencies |
+|---|---|
+| `nhc-parser` | `pest` / `pest_derive` (PEG grammar), `chrono` |
+| `nhc-download` | `tokio` (async runtime), `reqwest` (HTTP + TLS), `clap` (CLI), `regex` |
+| `nhc-validate` | `nhc-parser`, `walkdir`, `clap` |
+| `nhc-ingest` | `nhc-parser`, `nhc-types`, `tokio`, `reqwest`, `sqlx` (Postgres), `tracing` |
+
+All dependency versions are pinned in `Cargo.lock`. The workspace-level
+`Cargo.toml` defines shared version constraints under `[workspace.dependencies]`.
+
+---
+
 ## Workspace crates
 
 | Crate | Description |
