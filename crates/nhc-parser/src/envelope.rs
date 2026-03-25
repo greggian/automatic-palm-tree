@@ -50,6 +50,9 @@ pub fn parse_awips(awips_id: &str) -> Result<(ProductType, Basin, u8), ParseErro
         (Basin::Ep, r)
     } else if let Some(r) = suffix.strip_prefix("AL") {
         (Basin::Al, r)
+    } else if let Some(r) = suffix.strip_prefix("AT") {
+        // Wind probability products use "AT" for Atlantic instead of "AL"
+        (Basin::Al, r)
     } else if let Some(r) = suffix.strip_prefix("CP") {
         (Basin::Cp, r)
     } else {
