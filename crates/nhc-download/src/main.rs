@@ -54,16 +54,17 @@ static RE_YEAR: LazyLock<Regex> = LazyLock::new(|| {
 });
 /// Matches storm-name page links on year index, e.g. href="ANDREA.shtml" or href="ANDREA.shtml?"
 static RE_STORM_NAME: LazyLock<Regex> = LazyLock::new(|| {
-    Regex::new(r#"href="([A-Z]{3,}(?:-[A-Z]+)*)\.shtml"#).unwrap()
+    Regex::new(r#"href="([A-Z]{3,}(?:-[A-Z]+)*)\.shtml\??"#).unwrap()
 });
 /// Extracts basin dir from absolute advisory paths on storm name pages,
 /// e.g. /archive/2025/al01/al012025.fstadv.001.shtml → "al01"
 static RE_BASIN_DIR: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(r#"/archive/\d+/([a-z]{2}\d{2})/"#).unwrap()
 });
+/// Matches advisory file links — may be absolute (/archive/YYYY/XXNN/...) or relative.
 static RE_FILE: LazyLock<Regex> = LazyLock::new(|| {
     Regex::new(
-        r#"(?i)href="([a-z]{2}\d{2}\d{4})\.(fstadv|public|discus|wndprb)\.(\d{3})\.shtml""#,
+        r#"(?i)href="(?:/archive/\d+/[a-z]{2}\d{2}/)?([a-z]{2}\d{2}\d{4})\.(fstadv|public|discus|wndprb)\.(\d{3})\.shtml""#,
     )
     .unwrap()
 });
@@ -192,8 +193,7 @@ async fn discover_years(client: &Client) -> Result<Vec<u32>> {
     Ok(years)
 }
 
-/// Return `(basin_dir, storm_id)` pairs for every storm in `year`.
-/// `basin_dir` = e.g. `"ep04"`, `storm_id` = e.g. `"ep042025"`.
+/// Return `(storm_name, basin_dir, storm_id)` tuples for every storm in `year`.
 ///
 /// The NHC year index lists storms by name (e.g. `href="ANDREA.shtml"`).
 /// Each named storm page contains absolute advisory links from which we
@@ -202,7 +202,7 @@ async fn discover_storms(
     client: &Client,
     year: u32,
     basins: &HashSet<String>,
-) -> Result<Vec<(String, String)>> {
+) -> Result<Vec<(String, String, String)>> {
     let html = fetch(client, &format!("{BASE_URL}/{year}/")).await?;
 
     let storm_names: Vec<String> = RE_STORM_NAME
@@ -226,7 +226,7 @@ async fn discover_storms(
             let bd = cap[1].to_lowercase();
             if basins.contains(&bd[..2]) && seen.insert(bd.clone()) {
                 let storm_id = format!("{bd}{year}");
-                storms.push((bd, storm_id));
+                storms.push((name, bd, storm_id));
             }
         }
     }
@@ -247,15 +247,19 @@ struct Job {
     adv_num: String,
 }
 
-/// Discover all advisory files for one storm directory.
+/// Discover all advisory files for one storm via its name page.
+///
+/// The storm name page (e.g. `HELENE.shtml`) lists all product types with
+/// absolute links. The basin directory pages only have fstadv and public.
 async fn jobs_for_storm(
     client: &Client,
     year: u32,
+    storm_name: &str,
     basin_dir: &str,
     storm_id: &str,
     products: &HashSet<String>,
 ) -> Vec<Job> {
-    let url = format!("{BASE_URL}/{year}/{basin_dir}/");
+    let url = format!("{BASE_URL}/{year}/{storm_name}.shtml");
     let html = match fetch(client, &url).await {
         Ok(h) => h,
         Err(e) => {
@@ -424,20 +428,34 @@ async fn main() -> Result<()> {
         let year: u32 = parts[2].parse().context("--storm YEAR must be an integer")?;
         let basin_dir = format!("{basin}{num:02}");
         let storm_id  = format!("{basin_dir}{year}");
-        println!("Indexing {storm_id} …");
-        all_jobs.extend(
-            jobs_for_storm(&client, year, &basin_dir, &storm_id, &products).await,
-        );
+
+        // Discover the storm name so we can index from the name page
+        // (basin directory pages only list fstadv and public).
+        println!("Discovering storm name for {storm_id} …");
+        let all_storms = discover_storms(&client, year, &basins).await?;
+        let storm_name = all_storms.iter()
+            .find(|(_, bd, _)| bd == &basin_dir)
+            .map(|(name, _, _)| name.clone());
+
+        if let Some(name) = storm_name {
+            println!("  Found: {name}");
+            println!("  Indexing {storm_id} …");
+            all_jobs.extend(
+                jobs_for_storm(&client, year, &name, &basin_dir, &storm_id, &products).await,
+            );
+        } else {
+            bail!("storm {storm_id} not found in the {year} archive");
+        }
 
     } else if let Some(year) = cli.year {
         // --year YEAR
         println!("Discovering storms in {year} …");
         let storms = discover_storms(&client, year, &basins).await?;
         println!("  Found {} storm(s): {}", storms.len(),
-            storms.iter().map(|(_, s)| s.as_str()).collect::<Vec<_>>().join(", "));
-        for (bd, sid) in &storms {
+            storms.iter().map(|(_, _, s)| s.as_str()).collect::<Vec<_>>().join(", "));
+        for (name, bd, sid) in &storms {
             println!("  Indexing {sid} …");
-            all_jobs.extend(jobs_for_storm(&client, year, bd, sid, &products).await);
+            all_jobs.extend(jobs_for_storm(&client, year, name, bd, sid, &products).await);
         }
 
     } else {
@@ -450,8 +468,8 @@ async fn main() -> Result<()> {
             println!("  Discovering storms in {year} …");
             let storms = discover_storms(&client, year, &basins).await?;
             println!("    {} storm(s)", storms.len());
-            for (bd, sid) in &storms {
-                all_jobs.extend(jobs_for_storm(&client, year, bd, sid, &products).await);
+            for (name, bd, sid) in &storms {
+                all_jobs.extend(jobs_for_storm(&client, year, name, bd, sid, &products).await);
             }
         }
     }
