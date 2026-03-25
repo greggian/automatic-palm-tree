@@ -1,0 +1,220 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Forecast/Advisory (fstadv / TCM) Grammar
+//
+// Key design notes:
+// 1. All identifier/number tokens are ATOMIC (@{}) so that pest's implicit
+//    WHITESPACE rule cannot skip spaces inside them, preventing greedy
+//    over-matching across word boundaries.
+// 2. Every line rule ends with a mandatory `nl` (it consumes its own line
+//    ending).  The outer `fstadv` rule uses `nl*` only for blank separator
+//    lines — it never adds an extra `nl` after a line rule.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Horizontal whitespace only (NOT newlines) — auto-inserted between tokens
+WHITESPACE = _{ " " | "\t" }
+
+// Explicit newline — used only where line structure matters
+nl = _{ "\r\n" | "\n" | "\r" }
+
+// ── Atomic token primitives ───────────────────────────────────────────────────
+
+integer       = @{ ASCII_DIGIT+ }
+decimal       = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
+time_ref      = @{ ASCII_DIGIT{2} ~ "/" ~ ASCII_DIGIT{4} ~ "Z" }
+lat           = @{ decimal ~ ("N" | "S") }
+lon           = @{ decimal ~ ("E" | "W") }
+cardinal      = @{ (ASCII_ALPHA_UPPER | "-")+ }
+advisory_num  = @{ ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
+storm_name    = @{ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
+storm_num_raw = @{ ASCII_DIGIT+ }
+originator    = @{ ASCII_ALPHA_UPPER+ }
+ddhhmm        = @{ ASCII_DIGIT{6} }
+issued_hhmm   = @{ ASCII_DIGIT{4} }
+issued_day    = @{ ASCII_DIGIT{1,2} }
+issued_year   = @{ ASCII_DIGIT{4} }
+forecaster_name = @{ (ASCII_ALPHA_UPPER | "-")+ }
+
+month_abbr = {
+    "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
+    "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
+}
+day_of_week = {
+    "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN"
+}
+// Longest-match first to avoid prefix ambiguity
+status = {
+    "POTENTIAL TROP CYCLONE" |
+    "POST-TROPICAL CYCLONE"  |
+    "TROPICAL CYCLONE"       |
+    "TROPICAL STORM"         |
+    "POST-TROPICAL"          |
+    "REMNANT LOW"            |
+    "HURRICANE"              |
+    "DISSIPATED"
+}
+awips_id      = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
+product_code  = { "TCM" | "TCP" | "TCD" | "PWS" }
+basin_code    = { "EP" | "AL" | "CP" }
+
+any_line = { (!nl ~ ANY)* ~ nl }
+
+// ── Top-level ─────────────────────────────────────────────────────────────────
+
+fstadv = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    header_line ~
+    nws_line ~
+    issued_line ~
+    nl* ~
+    position_line ~
+    accuracy_line ~
+    nl* ~
+    movement_line ~
+    skip_lines ~
+    wind_line ~
+    radii_line* ~
+    skip_lines ~
+    pressure_line ~
+    nl* ~
+    repeat_position_line ~
+    prev_position_line ~
+    nl* ~
+    forecast_block* ~
+    next_advisory_line? ~
+    nl* ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl? ~ "NNNN" ~ nl? ~
+    EOI
+}
+
+// ── Envelope ──────────────────────────────────────────────────────────────────
+
+zczc_line       = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
+wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
+forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
+
+// ── Header lines ─────────────────────────────────────────────────────────────
+
+// "TROPICAL STORM FOUR-E FORECAST/ADVISORY NUMBER   1"
+header_line = {
+    status ~ storm_name ~
+    ("FORECAST/ADVISORY" | "SPECIAL ADVISORY" | "ADVISORY") ~
+    "NUMBER" ~ advisory_num ~ nl
+}
+
+// "NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025"
+nws_line = { "NWS" ~ (!nl ~ ANY)* ~ nl }
+
+// "1800 UTC WED JUL 09 2025"
+issued_line = {
+    issued_hhmm ~ "UTC" ~ day_of_week ~ month_abbr ~ issued_day ~ issued_year ~ nl
+}
+
+// ── Position / movement / pressure ───────────────────────────────────────────
+
+// "TROPICAL STORM CENTER LOCATED NEAR 13.5N  98.5W AT 09/1800Z"
+position_line = {
+    status? ~ "CENTER LOCATED NEAR" ~ lat ~ lon ~ "AT" ~ time_ref ~ nl
+}
+
+// "POSITION ACCURATE WITHIN  60 NM"
+accuracy_line = { "POSITION ACCURATE WITHIN" ~ integer ~ "NM" ~ nl }
+
+// "PRESENT MOVEMENT TOWARD THE WNW OR 285 DEGREES AT   8 KT"
+movement_line = {
+    "PRESENT MOVEMENT TOWARD THE" ~ cardinal ~ "OR" ~
+    integer ~ "DEGREES AT" ~ integer ~ "KT" ~ nl
+}
+
+// "ESTIMATED MINIMUM CENTRAL PRESSURE  999 MB"
+pressure_line = { "ESTIMATED MINIMUM CENTRAL PRESSURE" ~ integer ~ "MB" ~ nl }
+
+// "MAX SUSTAINED WINDS  40 KT WITH GUSTS TO  50 KT."
+wind_line = {
+    "MAX SUSTAINED WINDS" ~ integer ~ "KT WITH GUSTS TO" ~ integer ~ "KT" ~
+    "."? ~ nl
+}
+
+// " 34 KT.........120NE 120SE  90SW  90NW."
+radii_line = {
+    radii_threshold ~ "KT" ~ "."+ ~
+    radii_quad_ne ~ "NE" ~
+    radii_quad_se ~ "SE" ~
+    radii_quad_sw ~ "SW" ~
+    radii_quad_nw ~ "NW" ~
+    "."? ~ nl
+}
+radii_threshold = { "64" | "50" | "34" }
+radii_quad_ne   = { integer }
+radii_quad_se   = { integer }
+radii_quad_sw   = { integer }
+radii_quad_nw   = { integer }
+
+// "REPEAT...CENTER LOCATED NEAR 13.5N  98.5W AT 09/1800Z"
+repeat_position_line = {
+    "REPEAT" ~ "."* ~ "CENTER LOCATED NEAR" ~ lat ~ lon ~ "AT" ~ time_ref ~ nl
+}
+
+// "AT 09/1200Z CENTER WAS LOCATED NEAR 13.5N  97.5W"
+prev_position_line = {
+    "AT" ~ time_ref ~ "CENTER WAS LOCATED NEAR" ~ lat ~ lon ~ nl
+}
+
+// ── Forecast blocks ───────────────────────────────────────────────────────────
+
+forecast_block = {
+    (forecast_valid_line | outlook_valid_line) ~
+    forecast_wind_line? ~
+    forecast_radii_line* ~
+    nl*
+}
+
+// "FORECAST VALID 10/0600Z 14.2N 100.4W"
+// "FORECAST VALID 11/1800Z...DISSIPATED"
+forecast_valid_line = {
+    "FORECAST VALID" ~ time_ref ~
+    (lat ~ lon | "."+ ~ "DISSIPATED") ~ nl
+}
+
+// "OUTLOOK VALID 16/1800Z 17.5N 115.5W"
+outlook_valid_line = {
+    "OUTLOOK VALID" ~ time_ref ~ lat ~ lon ~ nl
+}
+
+// "MAX WIND  45 KT...GUSTS  55 KT."
+forecast_wind_line = {
+    "MAX WIND" ~ integer ~ "KT" ~ "."+ ~ "GUSTS" ~ integer ~ "KT" ~ "."? ~ nl
+}
+
+// "34 KT... 120NE 120SE  90SW  90NW."  (forecast radii, use same quads)
+forecast_radii_line = {
+    radii_threshold ~ "KT" ~ "."+ ~
+    radii_quad_ne ~ "NE" ~
+    radii_quad_se ~ "SE" ~
+    radii_quad_sw ~ "SW" ~
+    radii_quad_nw ~ "NW" ~
+    "."? ~ nl
+}
+
+// "NEXT ADVISORY AT 10/0000Z"
+// "NEXT SPECIAL ADVISORY AT 10/0000Z"
+next_advisory_line = {
+    "NEXT" ~ ("SPECIAL")? ~ "ADVISORY AT" ~ time_ref ~ nl
+}
+
+// Skip variable-content lines using negative lookaheads against anchors
+skip_lines = _{
+    (!(  "MAX SUSTAINED WINDS"
+       | "ESTIMATED MINIMUM CENTRAL PRESSURE"
+       | "REPEAT"
+       | "AT " ~ time_ref ~ " CENTER"
+       | "FORECAST VALID"
+       | "OUTLOOK VALID"
+       | "NEXT"
+       | "$$"
+    ) ~ any_line)*
+}

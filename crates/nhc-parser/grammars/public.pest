@@ -1,0 +1,177 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Public Advisory (public / TCP) Grammar
+//
+// Public advisories use mph and km/h (not knots).  They contain a structured
+// summary block followed by free-form prose.
+//
+//   ZCZC MIATCPEP4 ALL
+//   TTAA00 KNHC 091800
+//
+//   TROPICAL STORM FOUR-E PUBLIC ADVISORY NUMBER   1
+//   NWS NATIONAL HURRICANE CENTER MIAMI FL       EP042025
+//   1800 UTC WED JUL 09 2025
+//
+//   ...FOUR-E BECOMES A TROPICAL STORM...
+//
+//   SUMMARY OF 1800 UTC...6 PM CDT...INFORMATION
+//   ----------------------------------------------
+//   LOCATION...13.5N 98.5W
+//   ...
+//   MAXIMUM SUSTAINED WINDS...45 MPH...75 KM/H
+//   PRESENT MOVEMENT...WNW OR 285 DEGREES AT 9 MPH...15 KM/H
+//   MINIMUM CENTRAL PRESSURE...999 MB...29.50 INCHES
+//
+//   <prose sections>
+//
+//   NEXT ADVISORY
+//   -------------
+//   NEXT COMPLETE ADVISORY AT 10/0000Z
+//
+//   $$
+//   Forecaster LATTO
+//   NNNN
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Key design note: all identifier/number tokens are ATOMIC (@{}) so that
+// pest's implicit WHITESPACE rule cannot skip spaces inside them, preventing
+// greedy over-matching across word boundaries.
+
+WHITESPACE = _{ " " | "\t" }
+nl         = _{ "\r\n" | "\n" | "\r" }
+
+// ── Atomic token primitives ───────────────────────────────────────────────────
+
+integer        = @{ ASCII_DIGIT+ }
+decimal        = @{ ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
+time_ref       = @{ ASCII_DIGIT{2} ~ "/" ~ ASCII_DIGIT{4} ~ "Z" }
+lat            = @{ decimal ~ ("N" | "S") }
+lon            = @{ decimal ~ ("E" | "W") }
+cardinal       = @{ (ASCII_ALPHA_UPPER | "-")+ }
+advisory_num   = @{ ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
+storm_name     = @{ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
+storm_num_raw  = @{ ASCII_DIGIT+ }
+originator     = @{ ASCII_ALPHA_UPPER+ }
+ddhhmm         = @{ ASCII_DIGIT{6} }
+issued_hhmm    = @{ ASCII_DIGIT{4} }
+issued_day     = @{ ASCII_DIGIT{1,2} }
+issued_year    = @{ ASCII_DIGIT{4} }
+forecaster_name = @{ (ASCII_ALPHA_UPPER | "-")+ }
+
+month_abbr = {
+    "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
+    "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
+}
+day_of_week = { "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" }
+// Longest-match first to avoid prefix ambiguity
+status = {
+    "POTENTIAL TROP CYCLONE" |
+    "POST-TROPICAL CYCLONE"  |
+    "TROPICAL CYCLONE"       |
+    "TROPICAL STORM"         |
+    "POST-TROPICAL"          |
+    "REMNANT LOW"            |
+    "HURRICANE"              |
+    "DISSIPATED"
+}
+awips_id      = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
+product_code  = { "TCM" | "TCP" | "TCD" | "PWS" }
+basin_code    = { "EP" | "AL" | "CP" }
+any_line      = { (!nl ~ ANY)* ~ nl }
+
+// ── Top-level ─────────────────────────────────────────────────────────────────
+
+public_adv = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    header_line ~
+    nws_line ~
+    issued_line ~
+    nl* ~
+    headline? ~
+    (!"LOCATION" ~ any_line)* ~  // "SUMMARY OF..." header + dashes
+    location_line ~
+    any_line? ~           // "ABOUT N MI..." distance line
+    wind_line ~
+    movement_line ~
+    pressure_line ~
+    nl* ~
+    body_prose ~
+    next_advisory_section ~
+    nl* ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl? ~ "NNNN" ~ nl? ~
+    EOI
+}
+
+// ── Envelope ──────────────────────────────────────────────────────────────────
+
+zczc_line       = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
+wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
+forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
+// "TROPICAL STORM FOUR-E PUBLIC ADVISORY NUMBER   1"
+// "HURRICANE DALILA PUBLIC ADVISORY NUMBER   8"
+header_line = {
+    status ~ storm_name ~
+    ("PUBLIC")? ~ ("SPECIAL")? ~ "ADVISORY" ~ "NUMBER" ~ advisory_num ~ nl
+}
+
+nws_line = { "NWS" ~ (!nl ~ ANY)* ~ nl }
+
+issued_line = {
+    issued_hhmm ~ "UTC" ~ day_of_week ~ month_abbr ~ issued_day ~ issued_year ~ nl
+}
+
+// "...FOUR-E BECOMES A TROPICAL STORM..."
+headline      = { "..." ~ headline_text ~ "..." ~ nl }
+headline_text = @{ (!(nl | "...") ~ ANY)+ }
+
+// ── Summary block ─────────────────────────────────────────────────────────────
+
+// "LOCATION...13.5N 98.5W"
+location_line = { "LOCATION" ~ "..." ~ lat ~ lon ~ nl }
+
+// "MAXIMUM SUSTAINED WINDS...45 MPH...75 KM/H"
+wind_line = { "MAXIMUM SUSTAINED WINDS" ~ "..." ~ integer ~ "MPH" ~ "..." ~ integer ~ "KM/H" ~ nl }
+
+// "PRESENT MOVEMENT...WNW OR 285 DEGREES AT 9 MPH...15 KM/H"
+movement_line = {
+    "PRESENT MOVEMENT" ~ "..." ~
+    cardinal ~ "OR" ~ integer ~ "DEGREES AT" ~
+    integer ~ "MPH" ~ "..." ~ integer ~ "KM/H" ~ nl
+}
+
+// "MINIMUM CENTRAL PRESSURE...999 MB...29.50 INCHES"
+pressure_line = {
+    "MINIMUM CENTRAL PRESSURE" ~ "..." ~ integer ~ "MB" ~
+    "..." ~ decimal ~ "INCHES" ~ nl
+}
+
+// ── Prose and next advisory ───────────────────────────────────────────────────
+
+// Everything between the summary block and "NEXT ADVISORY" section header
+body_prose = { (!("NEXT ADVISORY" | "$$") ~ any_line)* }
+
+// "NEXT ADVISORY\n-------------\nNEXT COMPLETE ADVISORY AT 10/0000Z"
+next_advisory_section = {
+    "NEXT ADVISORY" ~ nl ~
+    ("-"+ ~ nl)? ~
+    next_advisory_line
+}
+
+// "NEXT COMPLETE ADVISORY AT 10/0000Z"
+// "NEXT SPECIAL ADVISORY AT 10/0000Z"
+next_advisory_line = {
+    "NEXT" ~ ("COMPLETE" | "SPECIAL")? ~ "ADVISORY AT" ~ time_ref ~ nl
+}
+
+// Gust line found inside body prose (extracted by Rust, not walked in grammar)
+// "MAXIMUM SUSTAINED WINDS ARE NEAR 45 MPH (75 KM/H) WITH GUSTS TO 55 MPH (89 KM/H)."
+gust_capture = {
+    "WITH GUSTS TO" ~ integer ~ "MPH" ~ "(" ~ integer ~ "KM/H" ~ ")" ~ "."?
+}

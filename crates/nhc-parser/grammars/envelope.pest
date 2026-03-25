@@ -1,0 +1,87 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC WMO / AWIPS Envelope Grammar
+//
+// Every NHC advisory is wrapped in:
+//
+//   ZCZC <AWIPS_ID> ALL
+//   TTAA00 KNHC DDHHMM
+//
+//   <body>
+//
+//   $$
+//   Forecaster <NAME>
+//   NNNN
+//
+// This grammar defines only the envelope tokens; individual product grammars
+// include these rules and layer their own body rules on top.
+// ─────────────────────────────────────────────────────────────────────────────
+
+// Horizontal whitespace (silent — consumed automatically between tokens)
+WHITESPACE = _{ " " | "\t" }
+
+// Explicit newline (NOT silent — products need to count line boundaries)
+nl = _{ "\r\n" | "\n" | "\r" }
+
+// ── ZCZC sentinel ─────────────────────────────────────────────────────────────
+
+zczc_line = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
+
+awips_id     = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
+product_code = { "TCM" | "TCP" | "TCD" | "PWS" }
+basin_code   = { "EP" | "AL" | "CP" }
+storm_num_raw = { ASCII_DIGIT+ }
+
+// ── WMO routing header ────────────────────────────────────────────────────────
+
+wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
+originator      = { ASCII_ALPHA_UPPER+ }
+ddhhmm          = { ASCII_DIGIT{6} }
+
+// ── End-of-body / end-of-transmission ────────────────────────────────────────
+
+end_body = _{ nl ~ "$$" ~ (nl | EOI) }
+
+forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
+forecaster_name = { (ASCII_ALPHA_UPPER | "-")+ }
+
+nnnn = _{ nl? ~ "NNNN" ~ (nl | EOI) }
+
+// ── Common terminal atoms ─────────────────────────────────────────────────────
+
+integer   = { ASCII_DIGIT+ }
+decimal   = { ASCII_DIGIT+ ~ ("." ~ ASCII_DIGIT*)? }
+sign      = { "N" | "S" | "E" | "W" }
+lat       = { decimal ~ ("N" | "S") }
+lon       = { decimal ~ ("E" | "W") }
+time_ref  = { ASCII_DIGIT{2} ~ "/" ~ ASCII_DIGIT{4} ~ "Z" }
+
+// Month abbreviations (for issued-time lines)
+month_abbr = {
+    "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
+    "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
+}
+day_of_week = { "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" }
+
+// Advisory number: digits with optional trailing letter (e.g. "12A")
+advisory_num = { ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
+
+// Storm name token: uppercase letters, digits, hyphens
+storm_name = { (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
+
+// Cardinal direction token (up to 3 chars, e.g. WNW, NNE)
+cardinal = { (ASCII_ALPHA_UPPER | "-")+ }
+
+// Status strings (longest match first to avoid prefix ambiguity)
+status = {
+    "POTENTIAL TROP CYCLONE" |
+    "POST-TROPICAL CYCLONE"  |
+    "TROPICAL CYCLONE"       |
+    "TROPICAL STORM"         |
+    "POST-TROPICAL"          |
+    "REMNANT LOW"            |
+    "HURRICANE"              |
+    "DISSIPATED"
+}
+
+// A line of arbitrary text (used to skip variable content)
+any_line = { (!nl ~ ANY)* ~ nl }

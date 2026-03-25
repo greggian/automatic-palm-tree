@@ -1,0 +1,90 @@
+// ─────────────────────────────────────────────────────────────────────────────
+// NHC Forecast Discussion (discus / TCD) Grammar
+//
+// The discussion is largely free-form meteorologist prose followed by a
+// structured FORECAST POSITIONS table.  We parse only the envelope and
+// the header/issued-time anchor lines; the full body is captured as raw text.
+//
+// Key design note: all identifier/number tokens are ATOMIC (@{}) so that
+// pest's implicit WHITESPACE rule cannot skip spaces inside them, preventing
+// greedy over-matching across word boundaries.
+// ─────────────────────────────────────────────────────────────────────────────
+
+WHITESPACE = _{ " " | "\t" }
+nl         = _{ "\r\n" | "\n" | "\r" }
+
+// ── Atomic token primitives ───────────────────────────────────────────────────
+
+advisory_num    = @{ ASCII_DIGIT+ ~ ASCII_ALPHA_UPPER? }
+storm_name      = @{ (ASCII_ALPHA_UPPER | ASCII_DIGIT | "-")+ }
+storm_num_raw   = @{ ASCII_DIGIT+ }
+originator      = @{ ASCII_ALPHA_UPPER+ }
+ddhhmm          = @{ ASCII_DIGIT{6} }
+issued_hhmm     = @{ ASCII_DIGIT{4} }
+issued_day      = @{ ASCII_DIGIT{1,2} }
+issued_year     = @{ ASCII_DIGIT{4} }
+forecaster_name = @{ (ASCII_ALPHA_UPPER | "-")+ }
+
+month_abbr = {
+    "JAN" | "FEB" | "MAR" | "APR" | "MAY" | "JUN" |
+    "JUL" | "AUG" | "SEP" | "OCT" | "NOV" | "DEC"
+}
+day_of_week = { "MON" | "TUE" | "WED" | "THU" | "FRI" | "SAT" | "SUN" }
+// Longest-match first to avoid prefix ambiguity
+status = {
+    "POTENTIAL TROP CYCLONE" |
+    "POST-TROPICAL CYCLONE"  |
+    "TROPICAL CYCLONE"       |
+    "TROPICAL STORM"         |
+    "POST-TROPICAL"          |
+    "REMNANT LOW"            |
+    "HURRICANE"              |
+    "DISSIPATED"
+}
+awips_id     = { "MIA" ~ product_code ~ basin_code ~ storm_num_raw }
+product_code = { "TCM" | "TCP" | "TCD" | "PWS" }
+basin_code   = { "EP" | "AL" | "CP" }
+any_line     = { (!nl ~ ANY)* ~ nl }
+
+// ── Top-level ─────────────────────────────────────────────────────────────────
+
+discus = {
+    SOI ~
+    zczc_line ~
+    wmo_header_line ~
+    nl* ~
+    header_line ~
+    nws_line ~
+    issued_line ~
+    body ~
+    "$$" ~ nl ~
+    forecaster_line ~
+    nl? ~ "NNNN" ~ nl? ~
+    EOI
+}
+
+// ── Envelope ──────────────────────────────────────────────────────────────────
+
+zczc_line       = { "ZCZC" ~ awips_id ~ "ALL" ~ nl }
+wmo_header_line = { "TTAA00" ~ originator ~ ddhhmm ~ nl }
+forecaster_line = { ^"Forecaster" ~ forecaster_name ~ nl? }
+
+// ── Header ────────────────────────────────────────────────────────────────────
+
+// "TROPICAL STORM FOUR-E FORECAST DISCUSSION NUMBER   1"
+// "HURRICANE DALILA FORECAST DISCUSSION NUMBER   8"
+header_line = {
+    status ~ storm_name ~
+    "FORECAST"? ~ "DISCUSSION" ~ "NUMBER" ~ advisory_num ~ nl
+}
+
+nws_line = { "NWS" ~ (!nl ~ ANY)* ~ nl }
+
+issued_line = {
+    issued_hhmm ~ "UTC" ~ day_of_week ~ month_abbr ~ issued_day ~ issued_year ~ nl
+}
+
+// ── Body: everything between the issued line and $$ ───────────────────────────
+
+// Capture the full prose body as one span of text.
+body = { (!("$$") ~ ANY)+ }

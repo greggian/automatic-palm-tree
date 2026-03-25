@@ -1,0 +1,24 @@
+[package]
+name    = "nhc-ingest"
+version = "0.1.0"
+edition = "2021"
+
+[[bin]]
+name = "nhc-ingest"
+path = "src/main.rs"
+
+[dependencies]
+nhc-types  = { path = "../nhc-types" }
+nhc-parser = { path = "../nhc-parser" }
+
+tokio   = { workspace = true }
+reqwest = { workspace = true }
+sqlx    = { workspace = true }
+chrono  = { workspace = true }
+serde   = { workspace = true }
+serde_json = { workspace = true }
+tracing            = { workspace = true }
+tracing-subscriber = { workspace = true }
+thiserror = { workspace = true }
+anyhow    = { workspace = true }
+config    = { workspace = true }

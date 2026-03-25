@@ -1,0 +1,14 @@
+[package]
+name    = "nhc-parser"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+nhc-types   = { path = "../nhc-types" }
+pest        = { workspace = true }
+pest_derive = { workspace = true }
+chrono      = { workspace = true }
+thiserror   = { workspace = true }
+
+[dev-dependencies]
+# test_data files are relative to the workspace root
